@@ -1,0 +1,39 @@
+// The disassembly was performed using Cutter
+
+0x00401028      mov     eax, 1     
+0x0040102d      mov     edi, 1
+0x00401032      movabs  rsi, msg1  ; 0x402000
+0x0040103c      mov     edx, 0x16  ; loc.len1
+0x00401041      syscall
+
+In the code block above we can see that a syscall is taking place. As we have already executed the nasm_crack we know that the first thing it asks is for the user to "Enter your password". 
+If we take a look at the Linux syscall tables(https://filippo.io/linux-syscall-table/) we can see that the "sys_read" syscall stores the fd, input and count of input in the rdi, rsi and rdx registers- which is in line with the code block above. It's worth noting that the rsi register(aka index register) is populated with the msg1 value (i.e. "Enter your password") via the movabs instruction.
+
+Thus the above block implements the "Enter your password" prompt displayed on screen.
+
+The next block:
+
+0x00401043      mov     eax, 0
+0x00401048      mov     edi, 0
+0x0040104d      movabs  rsi, input ; loc._edata
+                                   ; 0x402031
+0x00401057      mov     edx, 0x10  ; 16
+0x0040105c      syscall
+
+is pretty much the same but instead of the "sys_read" the "sys_write" is implemented. Input refers to the user's inputfor the password.
+
+0x0040105e      movabs  rdi, passwd ; 0x402026
+0x00401068      movabs  rsi, input ; loc._edata
+                                   ; 0x402031
+0x00401072      mov     ecx, 0xb   ; 11
+0x00401077      repe    cmpsb byte [rsi], byte ptr [rdi]
+0x00401079      je      correct_func
+
+Now, similar to the 2 prior code blocks we can see that the "movabs" instruction is used here as well. Simply put the data contained in the passwd and input are moved to the source and destination registers (primarily used for string operations). After that we see that a counter register (ecx) is populated with 11 (0xb). 
+In the following line we can see this: repe    cmpsb byte [rsi], byte ptr [rdi]  
+
+which denotes that the compare by byte instruction should be repeated. Now, if we look repe up we can find that it internally uses the ecx register to count for the loops that are needed. In other words, line 0x00401077 says "Compare byte by byte the contents of rdi and rsi until ecx is 0". Then if the contents are the same we will jump to the "correct_func" which will print "Correct!".
+
+So we're essentially searching for a 11 chars long string that if provided as input will be compared and matched to passwd. In the Strings section of Cutter we can see that one of the hardcoded strings is "supersecret" which is also 11 chars long.
+
+If we give this as input the program is cracked.
